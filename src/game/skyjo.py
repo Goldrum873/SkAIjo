@@ -34,8 +34,22 @@ class SkyjoGame:
 
         self.first_to_finish = None  # Pour tracker qui finit en premier
         self.total_scores = {name: 0 for name in player_names}  # Scores cumulés
-        self.last_round_starter_index = None
     
+    def reset_round(self):
+        """Réinitialise le jeu pour une nouvelle manche, en préservant les scores."""
+        self.deck = []
+        self.create_deck()
+        random.shuffle(self.deck)
+        self.discard_pile = []
+        self.first_to_finish = None
+
+        for player in self.players:
+            player.score = 0
+
+        self.deal_initial_cards()
+        self.initial_card_selection()
+        self.determine_first_player()
+
     def play_full_game(self):
         """Joue une partie complète jusqu'à ce qu'un joueur dépasse 100 points."""
         round_number = 1
@@ -45,8 +59,7 @@ class SkyjoGame:
             if any(score >= 100 for score in self.total_scores.values()):
                 break
             round_number += 1
-            # Réinitialisation pour la prochaine manche
-            self.__init__([player.name for player in self.players])
+            self.reset_round()
         
     def play_game(self):
         """Boucle principale du jeu"""
@@ -72,7 +85,10 @@ class SkyjoGame:
             drawn_card = self.player_draw_phase(current_player)
             if drawn_card is not None:
                 self.player_placement_phase(current_player, drawn_card)
-                
+
+            # Vérifier les colonnes complètes (3 cartes identiques)
+            self.check_complete_columns(current_player)
+
             # Vérifier si le joueur vient de terminer son plateau
             if current_player.all_cards_visible() and not last_round:
                 print(f"\n{current_player.name} a révélé toutes ses cartes! Dernier tour pour les autres joueurs!")
@@ -190,19 +206,6 @@ class SkyjoGame:
             except ValueError as e:
                 print(str(e))
     
-    def is_game_over(self) -> bool:
-        """Vérifie si la partie est terminée"""
-        if not self.deck:
-            print("\nPlus de cartes dans le deck!")
-            return True
-        
-        # La partie est terminée si tous les joueurs ont fini
-        if all(player.has_finished for player in self.players):
-            print("\nTous les joueurs ont joué leur dernier tour!")
-            return True
-        
-        return False
-    
     def player_draw_phase(self, player: Player) -> Optional[Card]:
         """Phase où le joueur choisit de piocher ou prendre la défausse"""
         top_discard = self.discard_pile[-1]
@@ -229,34 +232,21 @@ class SkyjoGame:
                 return self.discard_pile.pop()
 
     def check_complete_columns(self, player: Player):
-        """Vérifie et traite les colonnes complètes"""
+        """Vérifie et supprime les colonnes de 3 cartes identiques visibles."""
         for col in range(4):
             column = [player.board[row][col] for row in range(3)]
-            
-            # Si un élément est None, on passe à la colonne suivante
+
             if any(card is None for card in column):
                 continue
-            
-            try:
-                if (all(card is not None for card in column) and  # Pas de None
-                    all(card.visible for card in column) and      # Toutes visibles
-                    all(card.value == column[0].value for card in column)):  # Même valeur
-                    print(f"\nColonne {col + 1} complète avec des {column[0].value}!")
-                    # Défausse des cartes
-                    for row in range(3):
-                        self.discard_pile.append(player.board[row][col])
-                        player.board[row][col] = None
-            except AttributeError:
-                continue  # Si erreur, on passe simplement à la colonne suivante
+            if not all(card.visible for card in column):
+                continue
+            if not all(card.value == column[0].value for card in column):
+                continue
 
-    def calculate_current_score(self, player: Player) -> int:
-        """Calcule le score actuel en ignorant les cases vides."""
-        score = 0
-        for row in player.board:
-            for card in row:
-                if card is not None and card.visible:
-                    score += card.value
-        return score
+            print(f"\nColonne {col + 1} complète avec des {column[0].value}!")
+            for row in range(3):
+                self.discard_pile.append(player.board[row][col])
+                player.board[row][col] = None
 
     def calculate_final_score(self, player: Player) -> int:
         """Calcule le score final en incluant les cartes non révélées"""
@@ -283,11 +273,14 @@ class SkyjoGame:
             print(f"Score de {player.name}: {score}")
         
         # Vérification de la règle du doublement
+        # Le finisseur doit avoir STRICTEMENT le plus petit score, sinon doublement
         if self.first_to_finish:
-            min_score = min(round_scores.values())
             first_player_score = round_scores[self.first_to_finish.name]
-            
-            if first_player_score > min_score and first_player_score > 0:
+            other_scores = [s for name, s in round_scores.items()
+                           if name != self.first_to_finish.name]
+            min_other_score = min(other_scores)
+
+            if first_player_score >= min_other_score and first_player_score > 0:
                 print(f"\n{self.first_to_finish.name} a fini premier mais n'a pas le plus petit score!")
                 print(f"Son score est doublé: {first_player_score} → {first_player_score * 2}")
                 round_scores[self.first_to_finish.name] *= 2

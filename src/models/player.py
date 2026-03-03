@@ -8,7 +8,6 @@ class Player:
         self.board: List[List[Card]] = []  # 3 lignes x 4 colonnes
         self.score = 0
         self.strategy = strategy
-        self.has_finished = False
     
     def calculate_current_score(self) -> int:
         """Calcule le score actuel du joueur."""
