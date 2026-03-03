@@ -31,3 +31,13 @@ Thumbs.db
 # Training outputs
 trained_models/
 logs/
+training.csv
+elo_history.csv
+leaderboard.json
+best_ai.json
+
+# Trained tree models (binary, large)
+*.joblib
+
+# Generated agents
+agents/
